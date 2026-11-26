@@ -15,7 +15,7 @@ To fairly compare different flow rates across varying outdoor temperatures and o
 $$\eta_{\text{II,room}} = \frac{\text{COP}_{\text{system}}}{\text{COP}_{\text{Carnot,room}}} = \frac{Q_{\text{delivered}} / E_{\text{total,in}}}{\frac{T_{\text{room}} + 273.15}{T_{\text{room}} - T_{\text{outdoor,ODU}}}}$$
 
 ### Why $\eta_{\text{II,room}}$ instead of raw COP or water-based Carnot?
-1. **Weather-normalized:** Dividing by $\text{COP}_{\text{Carnot,room}}$ removes the primary effect of outdoor temperature fluctuations ($T_{\text{outdoor,ODU}}$).
+1. **Weather-normalized:** Dividing by $COP_{Carnot,room}$ removes the primary effect of outdoor temperature fluctuations ($T_{outdoor,ODU}$).
 2. **Captures the entire thermal chain:** Unlike Carnot formulas based on $T_{\text{supply}}$ (which lower the reference bar when a higher flow reduces $T_{\text{supply}}$), $\eta_{\text{II,room}}$ evaluates the **end-to-end efficiency** of moving heat from outdoor air into the heated room:
    - Condenser heat transfer (pinch point & subcooling),
    - Radiator heat transfer (LMTD at a given flow rate),
