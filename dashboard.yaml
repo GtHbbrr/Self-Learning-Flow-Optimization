@@ -1,0 +1,35 @@
+# OpenQuatt Self-Learning Flow Optimization - Lovelace Dashboard Cards
+# Add these cards via Dashboard -> Edit -> Add Card -> Manual
+
+type: vertical-stack
+cards:
+  - type: entities
+    title: OpenQuatt Flow Learning
+    show_header_toggle: false
+    entities:
+      - entity: input_boolean.oq_flow_learning_actief
+        name: Actief testen (wisselen na defrost of 90m)
+      - entity: sensor.oq_flowlearning_winnaar
+        name: Huidige statistische winnaar
+      - entity: sensor.defrost_eta_ii_kamer_prc
+        name: Lopende cyclus Kamerrendement
+      - entity: number.modbus_manual_ipwm
+        name: Actieve Manual iPWM
+      - entity: sensor.modbus_flow_average_selected
+        name: Werkelijke flow
+
+  - type: markdown
+    title: Leer-matrix & Significantie (Kamerrendement)
+    content: |
+
+      | Klasse / iPWM (~Flow) | Cycli (n) | Gem. Score | Std. Fout (SE) |
+      | :--- | :---: | :---: | :---: |
+      | **Hoog (>3,2 kW) — 608 (~435 L/u)** | {{ states('input_number.oq_n_hoog_608') | int(0) }} | **{{ states('input_number.oq_eta_hoog_608') | float(0) | round(2) }}%** | ± {{ state_attr('sensor.oq_flowlearning_winnaar', 'se_hoog_608') }}% |
+      | **Hoog (>3,2 kW) — 555 (~525 L/u)** | {{ states('input_number.oq_n_hoog_555') | int(0) }} | **{{ states('input_number.oq_eta_hoog_555') | float(0) | round(2) }}%** | ± {{ state_attr('sensor.oq_flowlearning_winnaar', 'se_hoog_555') }}% |
+      | **Hoog (>3,2 kW) — 500 (~605 L/u)** | {{ states('input_number.oq_n_hoog_500') | int(0) }} | **{{ states('input_number.oq_eta_hoog_500') | float(0) | round(2) }}%** | ± {{ state_attr('sensor.oq_flowlearning_winnaar', 'se_hoog_500') }}% |
+      | **Laag/Mid (≤3,2 kW) — 608 (~435 L/u)** | {{ states('input_number.oq_n_laag_608') | int(0) }} | **{{ states('input_number.oq_eta_laag_608') | float(0) | round(2) }}%** | - |
+      | **Laag/Mid (≤3,2 kW) — 555 (~525 L/u)** | {{ states('input_number.oq_n_laag_555') | int(0) }} | **{{ states('input_number.oq_eta_laag_555') | float(0) | round(2) }}%** | - |
+      | **Laag/Mid (≤3,2 kW) — 500 (~605 L/u)** | {{ states('input_number.oq_n_laag_500') | int(0) }} | **{{ states('input_number.oq_eta_laag_500') | float(0) | round(2) }}%** | - |
+
+      *Starttijd lopende cyclus: {{ states('input_datetime.oq_cyclus_starttijd') }}*
+      *Baseline kalibratiefactor: {{ states('input_number.oq_baseline_factor') }}*
