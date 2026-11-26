@@ -1,3 +1,5 @@
+🇬🇧 English | [🇳🇱 Nederlands](README.nl.md)
+
 # Self-Learning Flow Optimization for OpenQuatt (`η_II,room`)
 
 ## 1. Problem Statement & Motivation
