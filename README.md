@@ -2,33 +2,48 @@
 
 # Self-Learning Flow Optimization for OpenQuatt (`η_II,room`)
 
-## 1. Problem Statement & Motivation
-In hydronic heat pump systems (especially radiator-based setups), selecting the optimal water flow rate is a non-trivial trade-off:
-- **Too low flow (`~435 L/h`):** Increases radiator $\Delta T$ (7–9 K), forcing a higher supply temperature ($T_{\text{supply}}$) and higher condenser pressure ($P_{\text{cond}}$), which reduces compressor isentropic and volumetric efficiency.
-- **Too high flow (`>700 L/h`):** Increases cubic circulation pump power ($P_{\text{pump}}$), raises return temperature ($T_{\text{return}}$), reduces liquid refrigerant subcooling in the plate heat exchanger, and can cause flow noise.
+## Introduction
+A heat pump circulates warm water through your radiators or underfloor heating (UFH) to heat your home. The speed of that water flow (in liters per hour) has an impact on electricity consumption:
+- **Water flows too slowly:** The water cools down too much along the loop, forcing the heat pump to produce hotter supply water to keep the room warm. Higher supply temperatures increase compressor power consumption.
+- **Water flows too fast:** The circulation pump consumes more electrical power and water returns too warm to the heat pump, reducing refrigerant subcooling in the heat exchanger.
 
-Static curves or pure $\Delta T$-based PID controllers do not account for installation-specific radiator surface area, hydraulic resistance, or actual whole-system energy efficiency across defrost cycles.
+Every home has a unique hydraulic layout—radiators, underfloor heating, or a hybrid mix—so a single fixed flow setting is rarely optimal for every installation. This Proof of Concept (PoC) lets Home Assistant **measure and learn** which flow rate achieves the highest whole-system efficiency across complete operating cycles.
 
 ---
 
-## 2. Objective Function: Second-Law Efficiency at Room Level ($\eta_{\text{II,room}}$)
+## 1. Problem Statement & Motivation (Radiators, UFH & Hybrid Mix)
+In hydronic heat pump systems, heat output depends on the mean water temperature ($T_{mean} = \frac{T_{supply} + T_{return}}{2}$). Therefore, a larger temperature drop ($\Delta T$) always requires a higher supply temperature ($T_{supply}$) for the same heat output.
+
+The optimal $\Delta T$ window and hydraulic behavior vary by emitter type:
+
+| Emitter Type | Typical Optimal $\Delta T$ | Thermal & Hydraulic Behavior |
+| :--- | :--- | :--- |
+| **Radiators only** | **5.0 – 6.5 K** | Radiators have relatively low water volume. Too low flow (high $\Delta T$) reduces turbulence in the plate heat exchanger and radiators; too high flow increases cubic pump power and lowers liquid subcooling. |
+| **Underfloor Heating (UFH) only** | **3.0 – 5.0 K** | UFH has a large heat-exchange surface and high thermal mass, operating at low supply temperatures (28–35 °C). Higher flow keeps the floor surface uniform and lowers condenser pressure, provided pump power remains low. |
+| **Hybrid Mix (Radiators + UFH)** | **4.5 – 6.0 K** *(primary loop)* | Radiators dictate the required supply temperature. A mixing manifold with a secondary pump decouples primary and secondary flows, causing $T_{return}$ to rise rapidly if primary flow is too high. |
+
+Because pipe resistance, pump curves, and emitter surfaces differ per home, a single hardcoded $\Delta T$ target in firmware cannot be optimal for every installation.
+
+---
+
+## 2. Objective Function: Second-Law Efficiency at Room Level ($\eta_{II,room}$)
 To fairly compare different flow rates across varying outdoor temperatures and operating conditions, this PoC optimizes for **Second-Law (Exergy) Efficiency between outdoor air and indoor room temperature**:
 
-$$\eta_{\text{II,room}} = \frac{\text{COP}_{\text{system}}}{\text{COP}_{\text{Carnot,room}}} = \frac{Q_{\text{delivered}} / E_{\text{total,in}}}{\frac{T_{\text{room}} + 273.15}{T_{\text{room}} - T_{\text{outdoor,ODU}}}}$$
+$$\eta_{II,room} = \frac{\text{COP}_{system}}{\text{COP}_{Carnot,room}} = \frac{Q_{delivered} / E_{total,in}}{\frac{T_{room} + 273.15}{T_{room} - T_{outdoor,ODU}}}$$
 
-### Why $\eta_{\text{II,room}}$ instead of raw COP or water-based Carnot?
+### Why $\eta_{II,room}$ instead of raw COP or water-based Carnot?
 1. **Weather-normalized:** Dividing by $COP_{Carnot,room}$ removes the primary effect of outdoor temperature fluctuations ($T_{outdoor,ODU}$).
-2. **Captures the entire thermal chain:** Unlike Carnot formulas based on $T_{\text{supply}}$ (which lower the reference bar when a higher flow reduces $T_{\text{supply}}$), $\eta_{\text{II,room}}$ evaluates the **end-to-end efficiency** of moving heat from outdoor air into the heated room:
+2. **Captures the entire thermal chain:** Unlike Carnot formulas based on $T_{supply}$ (which lower the reference bar when a higher flow reduces $T_{supply}$), $\eta_{II,room}$ evaluates the **end-to-end efficiency** of moving heat from outdoor air into the heated room:
    - Condenser heat transfer (pinch point & subcooling),
-   - Radiator heat transfer (LMTD at a given flow rate),
-   - Cubic pump power consumption ($P_{\text{pump}}$ included in $E_{\text{total,in}}$),
+   - Radiator / UFH heat transfer (LMTD at a given flow rate),
+   - Cubic pump power consumption ($P_{pump}$ included in $E_{total,in}$),
    - Defrost energy losses.
 
 ### Numerical Example
-At $T_{\text{outdoor,ODU}} = 0.0\text{ }^\circ\text{C}$ and $T_{\text{room}} = 19.5\text{ }^\circ\text{C}$:
-- Theoretical Carnot limit: $\text{COP}_{\text{Carnot,room}} = \frac{292.65}{19.5} \approx 15.01$
+At $T_{outdoor,ODU} = 0.0\text{ }^\circ\text{C}$ and $T_{room} = 19.5\text{ }^\circ\text{C}$:
+- Theoretical Carnot limit: $COP_{Carnot,room} = \frac{292.65}{19.5} \approx 15.01$
 - Measured full-cycle system COP (including pump & defrost): `2.80`
-- Second-Law Efficiency: $\eta_{\text{II,room}} = \frac{2.80}{15.01} \approx \mathbf{18.7\%}$
+- Second-Law Efficiency: $\eta_{II,room} = \frac{2.80}{15.01} \approx \mathbf{18.7\%}$
 
 ---
 
@@ -37,7 +52,7 @@ To avoid transient distortion and false positives from measurement noise, the le
 
 1. **Full-Cycle Integration (Defrost-to-Defrost):**
    - Flow rate (`manualIpwm`) is held strictly constant throughout an entire heating cycle.
-   - Both delivered thermal energy ($Q_{\text{delivered}}$) and Carnot-normalized energy ($E_{\text{Carnot,room}}$) are integrated over the complete cycle, including the defrost phase.
+   - Both delivered thermal energy ($Q_{delivered}$) and Carnot-normalized energy ($E_{Carnot,room}$) are integrated over the complete cycle, including the defrost phase.
    - Cycles shorter than `35 min` or longer than `180 min` are excluded to prevent startup/shutdown bias.
 2. **Power Buckets:**
    - Learned metrics are separated into two average thermal load regimes: **Low/Mid ($\le 3.2\text{ kW}$)** and **High ($> 3.2\text{ kW}$)**.
@@ -47,10 +62,10 @@ To avoid transient distortion and false positives from measurement noise, the le
    - Tracks cycle count ($n$), running mean ($\mu$), and sum of squared deviations ($M_2$) per bucket and flow step.
    - Standard Error:
      $$SE = \sqrt{\frac{M_2}{n(n - 1)}}$$
-   - A higher flow step is only selected as the winner once $n \ge 4$ and its mean $\eta_{\text{II,room}}$ exceeds the baseline by at least $1.5 \times \sqrt{SE_{\text{baseline}}^2 + SE_{\text{candidate}}^2}$.
+   - A higher flow step is only selected as the winner once $n \ge 4$ and its mean $\eta_{II,room}$ exceeds the baseline by at least $1.5 \times \sqrt{SE_{baseline}^2 + SE_{candidate}^2}$.
 
 ---
 
 ## 4. Next Steps for Firmware Consideration
-- Collect multi-day baseline and A/B cycle datasets across outdoor temperature regimes.
-- Evaluate whether a lightweight version of cycle-integrated $\eta_{\text{II,room}}$ tracking can eventually complement or auto-tune OpenQuatt's flow control parameters (`flowKp`, `flowKi`, or dynamic flow curves).
+- Collect multi-day baseline and A/B cycle datasets across outdoor temperature regimes and emitter types (radiators, UFH, and hybrid).
+- Evaluate whether a lightweight version of cycle-integrated $\eta_{II,room}$ tracking can eventually complement or auto-tune OpenQuatt's flow control parameters (`flowKp`, `flowKi`, or dynamic flow curves).
