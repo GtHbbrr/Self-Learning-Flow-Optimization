@@ -14,7 +14,7 @@ Dit project laat Home Assistant **zelf meten en leren** welke watersnelheid in j
 ---
 
 ## 1. Probleemstelling & Motivatie (Radiatoren, VVW en Mix)
-Bij watergedragen warmtepompsystemen is het kiezen van de optimale waterflow een afweging tussen warmteoverdracht en pompenergie. Omdat de warmteafgifte wordt bepaald door de gemiddelde watertemperatuur ($T_{gem} = \frac{T_{aanvoer} + T_{retour}}{2}$), dwingt een hogere $\Delta T$ altijd een hogere aanvoertemperatuur ($T_{aanvoer}$) af.
+Bij watergedragen warmtepompsystemen is het kiezen van de optimale waterflow een afweging tussen warmteoverdracht en pompenergie. Omdat de warmteafgifte wordt bepaald door de gemiddelde watertemperatuur ($T_{gem} = \frac{T_{aanvoer} + T_{retour}}{2}$), dwingt een hogere $\Delta T$ ($T_{aanvoer} - T_{retour}$) altijd een hogere aanvoertemperatuur ($T_{aanvoer}$) af.
 
 Het optimale $\Delta T$-venster en hydraulische gedrag verschuiven per afgiftesysteem:
 
@@ -28,35 +28,37 @@ Omdat leidingweerstand, pompcurve en afgifte-oppervlak per woning verschillen, i
 
 ---
 
-## 2. Meetmethode: Genormaliseerd Kamerrendement (~100%-schaal)
-Om verschillende pompsnelheden eerlijk te vergelijken bij wisselend weer én verschillende compressortoerentallen, meten we het **genormaliseerde kamerrendement**. We vergelijken de werkelijke systeem-COP (inclusief pomp en ontdooien) met een vaste referentielat op basis van de werkelijk gemeten kamertemperatuur ($T_{kamer}$), de buitenlucht bij de buitenunit ($T_{buiten,ODU}$) en de frequentie-afhankelijke efficiëntiecurve van de buitenunit ($f_{ODU}$):
+## 2. Meetmethode: Zelf-ijkend Kamerrendement (~100%-schaal)
+Om verschillende pompsnelheden eerlijk te vergelijken bij wisselend weer én verschillende compressortoerentallen — zonder handmatige correctiefactoren per woningtype — gebruikt dit model een **zelf-ijkende rendementsindex**:
 
-$$\text{Doel-COP}_{kamer}(Hz) = \frac{(T_{kamer} + \Delta T_{ref}) + 273{,}15}{(T_{kamer} + \Delta T_{ref}) - T_{buiten,ODU}} \cdot f_{ODU}(Hz)$$
+$$\text{Referentie-COP}_{kamer}(Hz) = \frac{T_{kamer} + 273{,}15}{T_{kamer} - T_{buiten,ODU}} \cdot f_{ODU}$$
 
-$$\text{Kamerrendement} = \frac{\text{COP}_{systeem}}{\text{Doel-COP}_{kamer}(Hz)} \times 100\%$$
+$$\text{Kamerrendement} = \frac{\text{COP}_{systeem} / \text{Referentie-COP}_{kamer}(Hz)}{K_{baseline}} \times 100\%$$
 
 Waarbij:
 - $T_{kamer}$: de continu gemeten ruimtetemperatuur (geen vast setpoint, zodat opwarmen of zoninstraling eerlijk meeweegt).
-- $\Delta T_{ref}$: een vaste referentie-overtemperatuur voor het afgiftesysteem (`25 K` voor radiatoren, `10 K` voor VVW) die **niet** meebeweegt met de actuele watertemperatuur.
-- $f_{ODU}(Hz)$: de geijkte efficiëntiefactor van de buitenunit per compressorfrequentie (van `0,415` bij 30 Hz en `0,425` bij 45 Hz tot `0,365` bij 90 Hz).
+- $T_{buiten,ODU}$: de fysiek gemeten luchttemperatuur bij de buitenunit.
+- $f_{ODU}$: de geijkte efficiëntiefactor van de buitenunit per compressorfrequentie (`30–90 Hz`).
+- $K_{baseline}$: wordt tijdens de eerste geldige cyclus automatisch vastgelegd, zodat de baseline van elk huis (ongeacht radiatoren, VVW of mix) vanzelf op **100,0%** start.
 
 ### Waarom deze maatstaf?
-1. **Onafhankelijk van het weer en toerental:** Zowel schommelingen in $T_{buiten,ODU}$ als het lagere compressorrendement op hoge frequenties (80–90 Hz) worden genormaliseerd.
-2. **Meet de hele keten in één cijfer rond 100%:** Omdat $\Delta T_{ref}$ vaststaat, verschuift de lat niet mee als een hogere flow $T_{aanvoer}$ doet dalen. Elke verbetering in warmteoverdracht in de condensor en radiatoren, minus het extra stroomverbruik van de waterpomp ($P_{pomp}$) en ontdooiverliezen, wordt direct zichtbaar als een score boven of onder `100%`.
+1. **Geen handmatige instellingen per woning:** Of je nu radiatoren, vloerverwarming of een mix hebt, het systeem ijkt zichzelf op de eerste baseline-cyclus.
+2. **Onafhankelijk van weer en toerental:** Zowel schommelingen in $T_{buiten,ODU}$ als het lagere compressorrendement op hoge frequenties (80–90 Hz) worden genormaliseerd.
+3. **Meet de hele keten in één cijfer:** Omdat $T_{aanvoer}$ niet in de referentie zit, verschuift de lat niet mee als een hogere flow $T_{aanvoer}$ doet dalen. Elke nettowinst in warmteoverdracht — minus het extra pompvermogen ($P_{pomp}$) en ontdooiverliezen — wordt direct zichtbaar als een score boven `100%`.
 
 ---
 
 ## 3. Experimenteel Ontwerp & Statistische Validatie (Home Assistant PoC)
 Om vertekening door overgangseffecten en meetruis te voorkomen, gebruikt het leermodel een **cyclus-geblokkeerde online leermethode**:
 
-1. **Integratie over volledige cycli (van defrost tot defrost):**
-   - De flow (`manualIpwm`) wordt gedurende een volledige verwarmingscyclus strikt constant gehouden.
-   - Zowel de geleverde warmte ($Q_{geleverd}$) als de referentie-energie ($E_{doel,kamer}$) worden over de gehele cyclus opgeteld, inclusief de ontdooifase.
+1. **Integratie over volledige cycli (defrost-to-defrost of 90-minuten venster):**
+   - De flow (`manualIpwm`) wordt gedurende een volledige cyclus strikt constant gehouden.
+   - Bij vorst wisselt het model bij de start van elke ontdooicyclus (*defrost*). Bij mild weer (lagere compressorstanden van `30–55 Hz` zonder defrosts) sluit het model na **90 minuten** onafgebroken verwarmen automatisch een meetblok af.
    - Cycli korter dan `35 min` of langer dan `180 min` worden uitgesloten om opstart- en uitschakelbias te voorkomen.
 2. **Vermogensklassen (Buckets):**
    - De geleerde statistieken worden gescheiden in twee gemiddelde warmtevraag-regimes: **Laag/Midden ($\le 3{,}2\text{ kW}$)** en **Hoog ($> 3{,}2\text{ kW}$)**.
 3. **Verkenning versus Benutting (Exploration vs. Exploitation):**
-   - Test discrete flow-stappen (bijv. `608 iPWM` $\approx 435\text{ L/u}$, `555 iPWM` $\approx 525\text{ L/u}$, `500 iPWM` $\approx 605\text{ L/u}$) door uitsluitend bij de start van een defrost te wisselen.
+   - Test discrete flow-stappen (bijv. `608 iPWM` $\approx 435\text{ L/u}$, `555 iPWM` $\approx 525\text{ L/u}$, `500 iPWM` $\approx 605\text{ L/u}$).
 4. **Online Variantie & Significantietoets (Welford's Algoritme):**
    - Houdt per klasse en flow-stap het aantal cycli ($n$), het lopend gemiddelde ($\mu$) en de kwadratensom van afwijkingen ($M_2$) bij.
    - Standaardfout:
@@ -65,7 +67,7 @@ Om vertekening door overgangseffecten en meetruis te voorkomen, gebruikt het lee
 
 ---
 
-## 4. Installatie (Home Assistant Package)
-1. Plaats `packages/openquatt_flow_learning.yaml` in je Home Assistant `/config/packages/` map (zorg dat `packages: !include_dir_named packages` in je `configuration.yaml` staat).
-2. Pas indien nodig $\Delta T_{ref}$ aan (`25.0` voor radiatoren, `10.0` voor vloerverwarming).
-3. Herstart Home Assistant. Laat `input_boolean.oq_flow_learning_actief` eerst enkele cycli uit staan om een baseline te verzamelen en schakel hem daarna in om automatisch te testen.
+## 4. Installatie (Home Assistant)
+1. **Backend (Package):** Plaats alleen `packages/openquatt_flow_learning.yaml` in je Home Assistant `/config/packages/` map (zorg dat `packages: !include_dir_named packages` in je `configuration.yaml` staat) en herstart Home Assistant.
+2. **Dashboardkaart:** Open je dashboard in Home Assistant → **Bewerken** → **+ Kaart toevoegen** → **Handmatig** en plak de inhoud van `dashboard.yaml` erin. *(Plaats `dashboard.yaml` niet in `/config/packages/`).*
+3. **Nulmeting & Start:** Laat `input_boolean.oq_flow_learning_actief` eerst enkele cycli uit staan om de automatische nulmeting (`100,0%`) vast te leggen en schakel hem daarna in om automatisch te testen.
