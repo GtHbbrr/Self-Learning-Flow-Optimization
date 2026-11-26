@@ -1,11 +1,30 @@
+[🇬🇧 English](README.md) | 🇳🇱 Nederlands
+
 # Zelflerende Flow-optimalisatie voor OpenQuatt (`η_II,kamer`)
 
-## 1. Probleemstelling & Motivatie
-Bij watergedragen warmtepompsystemen (en in het bijzonder bij installaties met radiatoren) is het kiezen van de optimale waterflow een lastige afweging:
-- **Te lage flow (`~435 L/u`):** Vergroot de $\Delta T$ over de radiatoren (7–9 K), wat een hogere aanvoertemperatuur ($T_{aanvoer}$) en hogere condensordruk ($P_{cond}$) afdwingt. Hierdoor daalt het isentropisch en volumetrisch rendement van de compressor.
-- **Te hoge flow (`>700 L/u`):** Verhoogt het kubische elektriciteitsverbruik van de circulatiepomp ($P_{pomp}$), verhoogt de retourtemperatuur ($T_{retour}$), vermindert de onderkoeling (*subcooling*) van het vloeibare koudemiddel in de platenwisselaar en kan stromingsgeluid veroorzaken.
+## Inleiding
+Een warmtepomp pompt warm water door je radiatoren of vloerverwarming om je huis te verwarmen. Hoe snel dat water stroomt (de **flow**, in liter per uur), heeft invloed op je stroomverbruik:
+- **Stroomt het water te langzaam?** Dan koelt het water onderweg te veel af. De warmtepomp moet dan heter water maken om de kamer toch warm te krijgen. Heter water kost de compressor extra stroom.
+- **Stroomt het water te snel?** Dan verbruikt de waterpomp zelf meer stroom en komt het water te warm terug bij de warmtepomp. Daardoor kan de warmtepomp zijn warmte minder goed kwijt.
 
-Statische stooklijnen of zuivere $\Delta T$-gebaseerde PID-regelaars houden geen rekening met het installatiespecifieke radiatoroppervlak, de hydraulische weerstand of het werkelijke systeemrendement over volledige ontdooicycli (*defrosts*).
+Elk huis is anders. Het ene huis heeft alleen radiatoren, het andere vloerverwarming, en weer een ander huis heeft allebei. Daarom werkt één vaste instelling niet voor iedereen het beste. 
+
+Dit project laat Home Assistant **zelf meten en leren** welke watersnelheid in jouw huis het meeste rendement oplevert. Het systeem test verschillende standen steeds over een volledige werkcyclus en kiest pas een nieuwe stand als de metingen zeker weten dat die zuiniger is.
+
+---
+
+## 1. Probleemstelling & Motivatie (Radiatoren, VVW en Mix)
+Bij watergedragen warmtepompsystemen is het kiezen van de optimale waterflow een afweging tussen warmteoverdracht en pompenergie. Omdat de warmteafgifte wordt bepaald door de gemiddelde watertemperatuur ($T_{gem} = \frac{T_{aanvoer} + T_{retour}}{2}$), dwingt een hogere $\Delta T$ altijd een hogere aanvoertemperatuur ($T_{aanvoer}$) af.
+
+Het optimale $\Delta T$-venster en hydraulische gedrag verschuiven per afgiftesysteem:
+
+| Systeemtype | Typische optimale $\Delta T$ | Thermisch & hydraulisch gedrag |
+| :--- | :--- | :--- |
+| **Alleen radiatoren** | **5,0 – 6,5 K** | Radiatoren hebben relatief weinig waterinhoud. Bij te lage flow (hoge $\Delta T$) neemt de turbulentie in de platenwisselaar en radiatoren af; bij te hoge flow stijgt het pompverbruik en daalt de *subcooling*. |
+| **Alleen vloerverwarming (VVW)** | **3,0 – 5,0 K** | VVW heeft een groot afgifteoppervlak en grote thermische massa, waardoor $T_{aanvoer}$ al laag ligt (28–35 °C). Een hogere flow houdt de vloer gelijkmatiger warm en verlaagt de condensordruk, zolang het kubische pompverbruik beperkt blijft. |
+| **Mix (radiatoren + VVW)** | **4,5 – 6,0 K** *(primair circuit)* | De radiatoren bepalen hier de benodigde aanvoertemperatuur. Een mengverdeler met eigen pomp trekt de primaire en secundaire flow uit elkaar, waardoor $T_{retour}$ snel oploopt als het primaire debiet te hoog wordt. |
+
+Omdat leidingweerstand, pompcurve en afgifte-oppervlak per woning verschillen, is één vast $\Delta T$-getal in firmware nooit voor elke woning ideaal.
 
 ---
 
@@ -18,7 +37,7 @@ $$\eta_{II,kamer} = \frac{\text{COP}_{systeem}}{\text{COP}_{Carnot,kamer}} = \fr
 1. **Weersgenormaliseerd:** Delen door $COP_{Carnot,kamer}$ haalt het primaire effect van schommelingen in de buitentemperatuur ($T_{buiten,ODU}$) uit de vergelijking.
 2. **Omvat de volledige thermische keten:** In tegenstelling tot Carnot-formules op basis van $T_{aanvoer}$ (die de referentielat verlagen zodra een hogere flow $T_{aanvoer}$ doet dalen), beoordeelt $\eta_{II,kamer}$ het **totaalrendement** van warmtetransport van buitenlucht naar de verwarmde kamer:
    - Warmteoverdracht in de condensor (*pinch point* & *subcooling*),
-   - Warmteoverdracht in de radiatoren (LMTD bij de gekozen flow),
+   - Warmteoverdracht in radiatoren en/of VVW (LMTD bij de gekozen flow),
    - Kubisch pompvermogen ($P_{pomp}$ inbegrepen in $E_{totaal,in}$),
    - Energieverlies tijdens ontdooicycli (*defrosts*).
 
@@ -50,5 +69,5 @@ Om vertekening door overgangseffecten en meetruis te voorkomen, gebruikt het lee
 ---
 
 ## 4. Vervolgstappen voor Firmware-integratie
-- Meerdaagse baseline- en A/B-cyclusdatasets verzamelen over verschillende buitentemperatuurregimes.
+- Meerdaagse baseline- en A/B-cyclusdatasets verzamelen over verschillende buitentemperatuurregimes en afgiftesystemen (radiatoren, VVW en mix).
 - Evalueren of een lichtgewicht variant van cyclus-geïntegreerde $\eta_{II,kamer}$-tracking op termijn de flow-regelparameters van OpenQuatt (`flowKp`, `flowKi` of dynamische flowcurves) kan aanvullen of automatisch kan afstemmen.
