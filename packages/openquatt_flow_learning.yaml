@@ -1,0 +1,372 @@
+# OpenQuatt Self-Learning Flow Optimization (Self-Calibrating Room Efficiency)
+# Place this file in /config/packages/openquatt_flow_learning.yaml
+
+input_boolean:
+  oq_flow_learning_actief:
+    name: "OpenQuatt Flow Learning Actief Testen"
+    icon: mdi:school
+
+input_datetime:
+  oq_cyclus_starttijd:
+    name: "OpenQuatt Starttijd Huidige Cyclus"
+    has_date: true
+    has_time: true
+
+input_number:
+  oq_baseline_factor:
+    name: "OpenQuatt Baseline Kalibratiefactor"
+    min: 0
+    max: 5
+    step: 0.0001
+
+  # --- HIGH LOAD BUCKET (> 3.2 kW) ---
+  oq_eta_hoog_608:
+    name: "Room Efficiency High 608 iPWM"
+    min: 0
+    max: 150
+    step: 0.01
+    unit_of_measurement: "%"
+  oq_eta_hoog_555:
+    name: "Room Efficiency High 555 iPWM"
+    min: 0
+    max: 150
+    step: 0.01
+    unit_of_measurement: "%"
+  oq_eta_hoog_500:
+    name: "Room Efficiency High 500 iPWM"
+    min: 0
+    max: 150
+    step: 0.01
+    unit_of_measurement: "%"
+
+  oq_m2_hoog_608:
+    name: "Welford M2 High 608"
+    min: 0
+    max: 10000
+    step: 0.0001
+  oq_m2_hoog_555:
+    name: "Welford M2 High 555"
+    min: 0
+    max: 10000
+    step: 0.0001
+  oq_m2_hoog_500:
+    name: "Welford M2 High 500"
+    min: 0
+    max: 10000
+    step: 0.0001
+
+  oq_n_hoog_608:
+    name: "Cycles High 608 iPWM"
+    min: 0
+    max: 500
+    step: 1
+  oq_n_hoog_555:
+    name: "Cycles High 555 iPWM"
+    min: 0
+    max: 500
+    step: 1
+  oq_n_hoog_500:
+    name: "Cycles High 500 iPWM"
+    min: 0
+    max: 500
+    step: 1
+
+  # --- LOW/MID LOAD BUCKET (<= 3.2 kW) ---
+  oq_eta_laag_608:
+    name: "Room Efficiency Low/Mid 608 iPWM"
+    min: 0
+    max: 150
+    step: 0.01
+    unit_of_measurement: "%"
+  oq_eta_laag_555:
+    name: "Room Efficiency Low/Mid 555 iPWM"
+    min: 0
+    max: 150
+    step: 0.01
+    unit_of_measurement: "%"
+  oq_eta_laag_500:
+    name: "Room Efficiency Low/Mid 500 iPWM"
+    min: 0
+    max: 150
+    step: 0.01
+    unit_of_measurement: "%"
+
+  oq_m2_laag_608:
+    name: "Welford M2 Low/Mid 608"
+    min: 0
+    max: 10000
+    step: 0.0001
+  oq_m2_laag_555:
+    name: "Welford M2 Low/Mid 555"
+    min: 0
+    max: 10000
+    step: 0.0001
+  oq_m2_laag_500:
+    name: "Welford M2 Low/Mid 500"
+    min: 0
+    max: 10000
+    step: 0.0001
+
+  oq_n_laag_608:
+    name: "Cycles Low/Mid 608 iPWM"
+    min: 0
+    max: 500
+    step: 1
+  oq_n_laag_555:
+    name: "Cycles Low/Mid 555 iPWM"
+    min: 0
+    max: 500
+    step: 1
+  oq_n_laag_500:
+    name: "Cycles Low/Mid 500 iPWM"
+    min: 0
+    max: 500
+    step: 1
+sensor:
+  - platform: integration
+    source: sensor.modbus_hp1_heat_power
+    name: "OQ_FlowLearning_kWh_Output"
+    unique_id: oq_flowlearning_kwh_output
+    unit_prefix: k
+    round: 4
+    method: left
+
+  - platform: integration
+    source: sensor.pcarnot_kamer_100
+    name: "Ecarnot_kamer_totaal_kwh"
+    unique_id: ecarnot_kamer_totaal_kwh
+    unit_prefix: k
+    round: 4
+    method: left
+
+utility_meter:
+  oq_cyclus_kwh_output:
+    source: sensor.oq_flowlearning_kwh_output
+  defrost_totaal_ecarnot_kamer:
+    source: sensor.ecarnot_kamer_totaal_kwh
+
+template:
+  - sensor:
+      - name: "Pcarnot_kamer_100"
+        unique_id: pcarnot_kamer_100
+        unit_of_measurement: "W"
+        device_class: power
+        state_class: measurement
+        state: >
+          {% set p_el = states('sensor.modbus_hp1_power_input') | float(0) %}
+          {% set t_kamer = states('sensor.modbus_room_temperature_selected') | float(19.5) %}
+          {% set t_buiten = states('sensor.modbus_hp1_outside_temperature') | float(0.0) %}
+          {% set freq = states('sensor.modbus_hp1_compressor_frequency') | float(0) %}
+
+          {% set table = [
+            (30, 0.415), (35, 0.420), (43, 0.425), (49, 0.425), (56, 0.415),
+            (63, 0.405), (71, 0.395), (79, 0.385), (84, 0.375), (90, 0.365)
+          ] %}
+          {% if freq <= table %}
+            {% set f_odu = table %}
+          {% elif freq >= table[-1] %}
+            {% set f_odu = table[-1] %}
+          {% else %}
+            {% set ns = namespace(factor=0.415) %}
+            {% for i in range(table|length - 1) %}
+              {% set f1, c1 = table[i] %}
+              {% set f2, c2 = table[i+1] %}
+              {% if freq >= f1 and freq <= f2 %}
+                {% set ns.factor = c1 + (freq - f1) * (c2 - c1) / (f2 - f1) %}
+              {% endif %}
+            {% endfor %}
+            {% set f_odu = ns.factor %}
+          {% endif %}
+
+          {% if p_el > 50 and freq > 0 and t_kamer > (t_buiten + 2.0) %}
+            {% set carnot_kamer = ((t_kamer + 273.15) / (t_kamer - t_buiten)) * f_odu %}
+            {{ (p_el * carnot_kamer) | round(2) }}
+          {% else %}
+            0
+          {% endif %}
+
+      - name: "defrost_eta_ii_kamer_prc"
+        unique_id: defrost_eta_ii_kamer_prc
+        unit_of_measurement: "%"
+        state_class: measurement
+        state: >
+          {% set q_echt = states('sensor.oq_cyclus_kwh_output') | float(0) %}
+          {% set q_carnot_kamer = states('sensor.defrost_totaal_ecarnot_kamer') | float(0) %}
+          {% set k_base = states('input_number.oq_baseline_factor') | float(0) %}
+          {% if q_carnot_kamer > 0.1 and q_echt > 0.1 %}
+            {% set ruw = q_echt / q_carnot_kamer %}
+            {% set schaal = k_base if k_base > 0.1 else ruw %}
+            {{ ((ruw / schaal) * 100) | round(2) }}
+          {% else %}
+            0
+          {% endif %}
+
+      - name: "OQ_FlowLearning_Winnaar"
+        unique_id: oq_flowlearning_winnaar
+        unit_of_measurement: "iPWM"
+        state: >
+          {% set p_th = states('sensor.modbus_hp1_heat_power') | float(0) %}
+          {% set k = 'hoog' if p_th > 3200 else 'laag' %}
+          {% set e608 = states('input_number.oq_eta_' ~ k ~ '_608') | float(0) %}
+          {% set e555 = states('input_number.oq_eta_' ~ k ~ '_555') | float(0) %}
+          {% set e500 = states('input_number.oq_eta_' ~ k ~ '_500') | float(0) %}
+          {% set n608 = states('input_number.oq_n_' ~ k ~ '_608') | int(0) %}
+          {% set n555 = states('input_number.oq_n_' ~ k ~ '_555') | int(0) %}
+          {% set n500 = states('input_number.oq_n_' ~ k ~ '_500') | int(0) %}
+          {% set m608 = states('input_number.oq_m2_' ~ k ~ '_608') | float(0) %}
+          {% set m555 = states('input_number.oq_m2_' ~ k ~ '_555') | float(0) %}
+          {% set m500 = states('input_number.oq_m2_' ~ k ~ '_500') | float(0) %}
+          {% set se608 = ((m608 / (n608 * (n608 - 1))) ** 0.5) if n608 > 1 else 99 %}
+          {% set se555 = ((m555 / (n555 * (n555 - 1))) ** 0.5) if n555 > 1 else 99 %}
+          {% set se500 = ((m500 / (n500 * (n500 - 1))) ** 0.5) if n500 > 1 else 99 %}
+          {% set drempel_555 = 1.5 * ((se608**2 + se555**2) ** 0.5) %}
+          {% set drempel_500 = 1.5 * ((se608**2 + se500**2) ** 0.5) %}
+          {% if n500 >= 4 and e500 > (e608 + drempel_500) and e500 >= e555 %}
+            500
+          {% elif n555 >= 4 and e555 > (e608 + drempel_555) %}
+            555
+          {% else %}
+            608
+          {% endif %}
+        attributes:
+          se_hoog_608: "{{ (((states('input_number.oq_m2_hoog_608')|float(0)) / ([states('input_number.oq_n_hoog_608')|int(0) * (states('input_number.oq_n_hoog_608')|int(0) - 1), 1]|max)) ** 0.5) | round(3) }}"
+          se_hoog_555: "{{ (((states('input_number.oq_m2_hoog_555')|float(0)) / ([states('input_number.oq_n_hoog_555')|int(0) * (states('input_number.oq_n_hoog_555')|int(0) - 1), 1]|max)) ** 0.5) | round(3) }}"
+          se_hoog_500: "{{ (((states('input_number.oq_m2_hoog_500')|float(0)) / ([states('input_number.oq_n_hoog_500')|int(0) * (states('input_number.oq_n_hoog_500')|int(0) - 1), 1]|max)) ** 0.5) | round(3) }}"
+automation:
+  - id: openquatt_flow_learning_cycle_reset
+    alias: "OpenQuatt Flow Learning - Evaluate & Step at Defrost or 90m"
+    description: "Integrates cycle Room Efficiency (defrost-to-defrost or 90m window), updates Welford statistics, and selects next test iPWM."
+    triggers:
+      - trigger: state
+        entity_id: binary_sensor.modbus_hp1_bottom_plate_heater
+        to: "on"
+      - trigger: state
+        entity_id: binary_sensor.modbus_hp1_4_way_valve
+        to: "on"
+      - trigger: template
+        value_template: >
+          {% set start_ts = state_attr('input_datetime.oq_cyclus_starttijd', 'timestamp') | float(0) %}
+          {{ start_ts > 0 and (as_timestamp(now()) - start_ts) >= 5400 and is_state('select.modbus_working_mode', 'Heating') }}
+    conditions:
+      - condition: template
+        value_template: >
+          {% set start_ts = state_attr('input_datetime.oq_cyclus_starttijd', 'timestamp') | float(0) %}
+          {% set is_defrost = is_state('binary_sensor.modbus_hp1_defrost', 'on') %}
+          {% set is_90min = start_ts > 0 and (as_timestamp(now()) - start_ts) >= 5400 and is_state('select.modbus_working_mode', 'Heating') %}
+          {{ is_defrost or is_90min }}
+      - condition: template
+        value_template: >
+          {{ this.attributes.last_triggered is none or (as_timestamp(now()) - as_timestamp(this.attributes.last_triggered)) > 600 }}
+    actions:
+      - variables:
+          q_echt: "{{ states('sensor.oq_cyclus_kwh_output') | float(0) }}"
+          q_carnot_kamer: "{{ states('sensor.defrost_totaal_ecarnot_kamer') | float(0) }}"
+          k_base: "{{ states('input_number.oq_baseline_factor') | float(0) }}"
+          start_ts: "{{ state_attr('input_datetime.oq_cyclus_starttijd', 'timestamp') | float(0) }}"
+          duur_minuten: >
+            {% if start_ts > 0 %}
+              {{ ((as_timestamp(now()) - start_ts) / 60) | round(0) | int }}
+            {% else %}
+              0
+            {% endif %}
+          gem_vermogen_w: >
+            {% if duur_minuten > 0 %}
+              {{ (q_echt * 1000 / (duur_minuten / 60)) | round(0) | int }}
+            {% else %}
+              0
+            {% endif %}
+          ipwm_nu: "{{ states('number.modbus_manual_ipwm') | int(608) }}"
+          stap: >
+            {% if ipwm_nu >= 580 %}608
+            {% elif ipwm_nu >= 525 %}555
+            {% else %}500{% endif %}
+          klasse: "{{ 'hoog' if gem_vermogen_w > 3200 else 'laag' }}"
+
+      - if:
+          - condition: template
+            value_template: "{{ duur_minuten >= 35 and 180 >= duur_minuten and q_carnot_kamer > 0.1 and q_echt > 0.1 and 0.1 > k_base }}"
+        then:
+          - action: input_number.set_value
+            target:
+              entity_id: input_number.oq_baseline_factor
+            data:
+              value: "{{ (q_echt / q_carnot_kamer) | round(4) }}"
+
+      - variables:
+          k_actueel: "{{ states('input_number.oq_baseline_factor') | float(0) }}"
+          eta_ii_kamer: >
+            {% if q_carnot_kamer > 0.1 and q_echt > 0.1 and k_actueel > 0.1 %}
+              {{ (((q_echt / q_carnot_kamer) / k_actueel) * 100) | round(2) }}
+            {% else %}
+              0
+            {% endif %}
+
+      - if:
+          - condition: template
+            value_template: "{{ duur_minuten >= 35 and 180 >= duur_minuten and eta_ii_kamer > 60 and 140 > eta_ii_kamer }}"
+        then:
+          - variables:
+              n_ent: "input_number.oq_n_{{ klasse }}_{{ stap }}"
+              eta_ent: "input_number.oq_eta_{{ klasse }}_{{ stap }}"
+              m2_ent: "input_number.oq_m2_{{ klasse }}_{{ stap }}"
+              oud_n: "{{ states(n_ent) | int(0) }}"
+              oud_mean: "{{ states(eta_ent) | float(0) }}"
+              oud_m2: "{{ states(m2_ent) | float(0) }}"
+              nieuw_n: "{{ oud_n + 1 }}"
+              delta1: "{{ eta_ii_kamer - oud_mean }}"
+              nieuw_mean: "{{ oud_mean + (delta1 / nieuw_n) }}"
+              delta2: "{{ eta_ii_kamer - nieuw_mean }}"
+              nieuw_m2: "{{ oud_m2 + (delta1 * delta2) }}"
+          - action: input_number.set_value
+            target:
+              entity_id: "{{ n_ent }}"
+            data:
+              value: "{{ nieuw_n }}"
+          - action: input_number.set_value
+            target:
+              entity_id: "{{ eta_ent }}"
+            data:
+              value: "{{ nieuw_mean | round(3) }}"
+          - action: input_number.set_value
+            target:
+              entity_id: "{{ m2_ent }}"
+            data:
+              value: "{{ nieuw_m2 | round(4) }}"
+
+      - if:
+          - condition: state
+            entity_id: input_boolean.oq_flow_learning_actief
+            state: "on"
+        then:
+          - variables:
+              n608: "{{ states('input_number.oq_n_' ~ klasse ~ '_608') | int(0) }}"
+              n555: "{{ states('input_number.oq_n_' ~ klasse ~ '_555') | int(0) }}"
+              n500: "{{ states('input_number.oq_n_' ~ klasse ~ '_500') | int(0) }}"
+              min_n: "{{ [n608, n555, n500] | min }}"
+              volgende_ipwm: >
+                {% if 6 > min_n %}
+                  {% if n608 == min_n %}608
+                  {% elif n555 == min_n %}555
+                  {% else %}500{% endif %}
+                {% else %}
+                  {{ states('sensor.oq_flowlearning_winnaar') | int(608) }}
+                {% endif %}
+          - action: number.set_value
+            target:
+              entity_id: number.modbus_manual_ipwm
+            data:
+              value: "{{ volgende_ipwm }}"
+
+      - action: input_datetime.set_datetime
+        target:
+          entity_id: input_datetime.oq_cyclus_starttijd
+        data:
+          timestamp: "{{ as_timestamp(now()) }}"
+      - action: utility_meter.calibrate
+        target:
+          entity_id:
+            - sensor.oq_cyclus_kwh_output
+            - sensor.defrost_totaal_ecarnot_kamer
+        data:
+          value: 0
+    mode: single
