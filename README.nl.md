@@ -4,8 +4,8 @@
 
 ## Inleiding
 Een warmtepomp geeft zijn warmte af aan het water dat door je radiatoren of vloerverwarming stroomt. Hoe snel dat water stroomt (de **flow**, in liter per uur), bepaalt direct hoe warm het water wordt en hoeveel stroom de installatie verbruikt:
-- **Stroomt het water langzamer?** Dan neemt dezelfde hoeveelheid warmte per liter water meer toe ($\Delta T$ wordt groter). Daardoor stijgt de aanvoertemperatuur ($T_{aanvoer}$) en loopt de druk in de compressor op — zelfs op het laagste toerental (30 Hz).
-- **Stroomt het water sneller?** Dan blijft $T_{aanvoer}$ lager, maar verbruikt de waterpomp zelf meer stroom en komt het water warmer terug bij de warmtepomp, waardoor het koudemiddel minder goed onderkoelt.
+- **Stroomt het water langzamer?** Dan neemt elke liter water meer warmte op ($\Delta T$ wordt groter). Daardoor stijgt de aanvoertemperatuur ($T_{aanvoer}$) en loopt de druk in de warmtepomp op — zelfs op de laagste stand (30 Hz).
+- **Stroomt het water sneller?** Dan blijft de aanvoertemperatuur ($T_{aanvoer}$) lager, maar verbruikt de waterpomp zelf meer stroom. Ook komt het water warmer terug bij de warmtepomp, waardoor die zijn warmte minder goed kwijt kan.
 
 Elk huis is anders. Het ene huis heeft alleen radiatoren, het andere vloerverwarming, en weer een ander huis heeft allebei. Daarom werkt één vaste instelling niet voor iedereen het beste.
 
@@ -20,7 +20,7 @@ Het optimale $\Delta T$-venster en hydraulische gedrag verschuiven per afgiftesy
 
 | Systeemtype | Typische optimale $\Delta T$ | Thermisch & hydraulisch gedrag |
 | :--- | :--- | :--- |
-| **Alleen radiatoren** | **5,0 – 6,5 K** | Radiatoren hebben relatief weinig waterinhoud. Bij te lage flow (hoge $\Delta T$) neemt de turbulentie in de platenwisselaar en radiatoren af; bij te hoge flow stijgt het pompverbruik en daalt de *subcooling*. |
+| **Alleen radiatoren** | **5,0 – 6,5 K** | Radiatoren hebben relatief weinig waterinhoud. Bij te lage flow (hoge $\Delta T$) neemt de turbulentie in de platenwisselaar en radiatoren af; bij te hoge flow stijgt het pompverbruik en kan het koudemiddel in de wisselaar minder goed afkoelen. |
 | **Alleen vloerverwarming (VVW)** | **3,0 – 5,0 K** | VVW heeft een groot afgifteoppervlak en grote thermische massa, waardoor $T_{aanvoer}$ al laag ligt (28–35 °C). Een hogere flow houdt de vloer gelijkmatiger warm en verlaagt de condensordruk, zolang het kubische pompverbruik beperkt blijft. |
 | **Mix (radiatoren + VVW)** | **4,5 – 6,0 K** *(primair circuit)* | De radiatoren bepalen hier de benodigde aanvoertemperatuur. Een mengverdeler met eigen pomp trekt de primaire en secundaire flow uit elkaar, waardoor $T_{retour}$ snel oploopt als het primaire debiet te hoog wordt. |
 
@@ -28,24 +28,21 @@ Omdat leidingweerstand, pompcurve en afgifte-oppervlak per woning verschillen, i
 
 ---
 
-## 2. Meetmethode: Kamerrendement
-Om verschillende pompsnelheden eerlijk te vergelijken bij wisselend weer, meten we het **kamerrendement**. Dit getal laat zien hoeveel van het maximaal haalbare rendement je warmtepomp, waterpomp en radiatoren samen behalen om de kamer warm te houden:
+## 2. Meetmethode: Genormaliseerd Kamerrendement (~100%-schaal)
+Om verschillende pompsnelheden eerlijk te vergelijken bij wisselend weer én verschillende compressortoerentallen, meten we het **genormaliseerde kamerrendement**. We vergelijken de werkelijke systeem-COP (inclusief pomp en ontdooien) met een vaste referentielat op basis van de werkelijk gemeten kamertemperatuur ($T_{kamer}$), de buitenlucht bij de buitenunit ($T_{buiten,ODU}$) en de frequentie-afhankelijke efficiëntiecurve van de buitenunit ($f_{ODU}$):
 
-$$\text{Kamerrendement} = \frac{\text{COP}_{systeem}}{\text{COP}_{Carnot,kamer}} = \frac{Q_{geleverd} / E_{totaal,in}}{\frac{T_{kamer} + 273{,}15}{T_{kamer} - T_{buiten,ODU}}}$$
+$$\text{Doel-COP}_{kamer}(Hz) = \frac{(T_{kamer} + \Delta T_{ref}) + 273{,}15}{(T_{kamer} + \Delta T_{ref}) - T_{buiten,ODU}} \cdot f_{ODU}(Hz)$$
 
-### Waarom kamerrendement in plaats van ruwe COP of Carnot op aanvoertemperatuur?
-1. **Onafhankelijk van het weer:** Door te vergelijken met het theoretisch maximum tussen buiten en binnen ($COP_{Carnot,kamer}$), verstoren wisselingen in de buitentemperatuur ($T_{buiten,ODU}$) de meting niet.
-2. **Meet de hele keten in één cijfer:** Formules op basis van de watertemperatuur ($T_{aanvoer}$) verlagen de lat zodra een hogere flow $T_{aanvoer}$ doet dalen. Het kamerrendement kijkt puur naar het eindresultaat — warmte van buiten naar de woonkamer brengen — en neemt alles mee:
-   - Warmteoverdracht in de condensor (*pinch point* & *subcooling*),
-   - Warmteoverdracht in radiatoren en/of vloerverwarming,
-   - Het stroomverbruik van de waterpomp ($P_{pomp}$ zit in $E_{totaal,in}$),
-   - Energieverlies tijdens ontdooicycli (*defrosts*).
+$$\text{Kamerrendement} = \frac{\text{COP}_{systeem}}{\text{Doel-COP}_{kamer}(Hz)} \times 100\%$$
 
-### Rekenvoorbeeld
-Bij $T_{buiten,ODU} = 0{,}0\text{ }^\circ\text{C}$ en $T_{kamer} = 19{,}5\text{ }^\circ\text{C}$:
-- Maximaal haalbaar rendement (Carnot-limiet): $COP_{Carnot,kamer} = \frac{292{,}65}{19{,}5} \approx 15{,}01$
-- Gemeten rendement over de hele cyclus (inclusief pomp & defrost): `2,80`
-- Kamerrendement: $\frac{2{,}80}{15{,}01} \approx \mathbf{18{,}7\%}$
+Waarbij:
+- $T_{kamer}$: de continu gemeten ruimtetemperatuur (geen vast setpoint, zodat opwarmen of zoninstraling eerlijk meeweegt).
+- $\Delta T_{ref}$: een vaste referentie-overtemperatuur voor het afgiftesysteem (`25 K` voor radiatoren, `10 K` voor VVW) die **niet** meebeweegt met de actuele watertemperatuur.
+- $f_{ODU}(Hz)$: de geijkte efficiëntiefactor van de buitenunit per compressorfrequentie (van `0,415` bij 30 Hz en `0,425` bij 45 Hz tot `0,365` bij 90 Hz).
+
+### Waarom deze maatstaf?
+1. **Onafhankelijk van het weer en toerental:** Zowel schommelingen in $T_{buiten,ODU}$ als het lagere compressorrendement op hoge frequenties (80–90 Hz) worden genormaliseerd.
+2. **Meet de hele keten in één cijfer rond 100%:** Omdat $\Delta T_{ref}$ vaststaat, verschuift de lat niet mee als een hogere flow $T_{aanvoer}$ doet dalen. Elke verbetering in warmteoverdracht in de condensor en radiatoren, minus het extra stroomverbruik van de waterpomp ($P_{pomp}$) en ontdooiverliezen, wordt direct zichtbaar als een score boven of onder `100%`.
 
 ---
 
@@ -54,7 +51,7 @@ Om vertekening door overgangseffecten en meetruis te voorkomen, gebruikt het lee
 
 1. **Integratie over volledige cycli (van defrost tot defrost):**
    - De flow (`manualIpwm`) wordt gedurende een volledige verwarmingscyclus strikt constant gehouden.
-   - Zowel de geleverde warmte ($Q_{geleverd}$) als de benodigde referentie-energie ($E_{Carnot,kamer}$) worden over de gehele cyclus opgeteld, inclusief de ontdooifase.
+   - Zowel de geleverde warmte ($Q_{geleverd}$) als de referentie-energie ($E_{doel,kamer}$) worden over de gehele cyclus opgeteld, inclusief de ontdooifase.
    - Cycli korter dan `35 min` of langer dan `180 min` worden uitgesloten om opstart- en uitschakelbias te voorkomen.
 2. **Vermogensklassen (Buckets):**
    - De geleerde statistieken worden gescheiden in twee gemiddelde warmtevraag-regimes: **Laag/Midden ($\le 3{,}2\text{ kW}$)** en **Hoog ($> 3{,}2\text{ kW}$)**.
@@ -68,6 +65,7 @@ Om vertekening door overgangseffecten en meetruis te voorkomen, gebruikt het lee
 
 ---
 
-## 4. Vervolgstappen voor Firmware-integratie
-- Meerdaagse baseline- en A/B-cyclusdatasets verzamelen over verschillende buitentemperatuurregimes en afgiftesystemen (radiatoren, VVW en mix).
-- Evalueren of een lichtgewicht variant van cyclus-geïntegreerde kamerrendement-tracking op termijn de flow-regelparameters van OpenQuatt (`flowKp`, `flowKi` of dynamische flowcurves) kan aanvullen of automatisch kan afstemmen.
+## 4. Installatie (Home Assistant Package)
+1. Plaats `packages/openquatt_flow_learning.yaml` in je Home Assistant `/config/packages/` map (zorg dat `packages: !include_dir_named packages` in je `configuration.yaml` staat).
+2. Pas indien nodig $\Delta T_{ref}$ aan (`25.0` voor radiatoren, `10.0` voor vloerverwarming).
+3. Herstart Home Assistant. Laat `input_boolean.oq_flow_learning_actief` eerst enkele cycli uit staan om een baseline te verzamelen en schakel hem daarna in om automatisch te testen.
